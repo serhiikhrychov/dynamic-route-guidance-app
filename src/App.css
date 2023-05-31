@@ -3,8 +3,8 @@ body {
   justify-content: center;
 }
 .app {
-    height: 600px;
-    width: 100vh;
+  height: 600px;
+  width: 100vh;
 }
 .map-container {
   height: 100%;
@@ -21,7 +21,15 @@ body {
 }
 
 .marker-delivery {
-    width: 22px;
-    height: 22px;
-    background-color: red;
+  width: 22px;
+  height: 22px;
+  background-color: red;
+}
+
+.marker-gas-station {
+  background-image: url("gas_station.png");
+  background-size: cover;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
 }
