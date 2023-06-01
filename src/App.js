@@ -11,7 +11,7 @@ const App = () => {
   const [longitude, setLongitude] = useState(36.2304);
   const [latitude, setLatitude] = useState(49.9935);
   const [routeLength, setRouteLength] = useState(0);
-  const [notification, setNotification] = useState(null);
+  const [notification, setNotification] = useState("");
   const gasStations = []; // Global array to store gas station points
   let fuelLeftForMeters = 500; // Fuel left in meters
 
@@ -163,24 +163,6 @@ const App = () => {
       });
     };
 
-    // const recalculateRoutes = () => {
-    //   sortDestinations(destinations).then((sorted) => {
-    //     sorted.unshift(origin);
-
-    //     ttapi.services
-    //       .calculateRoute({
-    //         key: apiKey,
-    //         locations: sorted,
-    //       })
-    //       .then((routeData) => {
-    //         const geojson = routeData.toGeoJson();
-    //         drawRoute(geojson, map);
-    //       });
-    //   });
-    // };
-
-    // distance
-
     const calculateDistance = (coord1, coord2) => {
       const toRad = (value) => (value * Math.PI) / 180;
       const earthRadius = 6371; // Radius of the Earth in kilometers
@@ -235,23 +217,54 @@ const App = () => {
               }
 
               if (nearestGasStation) {
-                const nearestGasStationPoints =
-                  convertToPoints(nearestGasStation); // Convert nearest gas station to points format
-                sorted[1] = nearestGasStationPoints.point; // Use the "point" property of the converted gas station
-                ttapi.services
-                  .calculateRoute({
-                    key: apiKey,
-                    locations: sorted,
-                  })
-                  .then((routeData) => {
-                    const geojson = routeData.toGeoJson();
-                    drawRoute(geojson, map);
-                  });
+                if (minDistance > fuelLeftForMeters) {
+                  // Notify user that the nearest gas station is further than the fuel range
+                  setNotification(
+                    "The nearest gas station is further than the remaining fuel range."
+                  );
+                } else {
+                  const nearestGasStationPoints =
+                    convertToPoints(nearestGasStation); // Convert nearest gas station to points format
+                  sorted[1] = nearestGasStationPoints.point; // Use the "point" property of the converted gas station
+                  ttapi.services
+                    .calculateRoute({
+                      key: apiKey,
+                      locations: sorted,
+                    })
+                    .then((routeData) => {
+                      const geojson = routeData.toGeoJson();
+                      drawRoute(geojson, map);
+
+                      // Check if the remaining distance is still greater than the fuel left
+                      const remainingDistance =
+                        geojson.features[0]?.properties?.summary
+                          ?.lengthInMeters;
+                      if (remainingDistance > fuelLeftForMeters) {
+                        // Notify user that the remaining distance is greater than the fuel left
+                        setNotification(
+                          "The remaining distance is greater than the fuel left."
+                        );
+                      }
+                    });
+                }
               } else {
                 // Notify user that there is no nearby gas station within the fuel range
                 setNotification(
                   "No gas station is available within the fuel range."
                 );
+              }
+            } else {
+              // Check if the remaining distance is still greater than the fuel left
+              const remainingDistance =
+                geojson.features[0]?.properties?.summary?.lengthInMeters;
+              if (remainingDistance > fuelLeftForMeters) {
+                // Notify user that the remaining distance is greater than the fuel left
+                setNotification(
+                  "The remaining distance is greater than the fuel left."
+                );
+              } else {
+                // Clear notification if the remaining distance is within the fuel left
+                setNotification("");
               }
             }
           });
@@ -294,7 +307,9 @@ const App = () => {
             />
           </div>
           <div>Route Length: {routeLength} meters</div>
-          {notification && <div className="notification">{notification}</div>}
+          {fuelLeftForMeters < routeLength && (
+            <div className="notification">{notification}</div>
+          )}
         </div>
       )}
     </>
