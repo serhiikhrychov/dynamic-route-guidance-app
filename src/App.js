@@ -11,13 +11,15 @@ const App = () => {
   const [longitude, setLongitude] = useState(36.2304);
   const [latitude, setLatitude] = useState(49.9935);
   const [routeLength, setRouteLength] = useState(0);
+  const [notification, setNotification] = useState(null);
   const gasStations = []; // Global array to store gas station points
+  let fuelLeftForMeters = 500; // Fuel left in meters
 
   const convertToPoints = (lngLat) => {
     return {
       point: {
-        longitude: lngLat.lat,
-        latitude: lngLat.lng,
+        longitude: lngLat.lng,
+        latitude: lngLat.lat,
       },
     };
   };
@@ -81,7 +83,7 @@ const App = () => {
     new tt.Marker({
       element: element,
     })
-      .setLngLat(lngLat)
+      .setLngLat([lngLat.lng, lngLat.lat])
       .addTo(map);
   };
 
@@ -161,6 +163,48 @@ const App = () => {
       });
     };
 
+    // const recalculateRoutes = () => {
+    //   sortDestinations(destinations).then((sorted) => {
+    //     sorted.unshift(origin);
+
+    //     ttapi.services
+    //       .calculateRoute({
+    //         key: apiKey,
+    //         locations: sorted,
+    //       })
+    //       .then((routeData) => {
+    //         const geojson = routeData.toGeoJson();
+    //         drawRoute(geojson, map);
+    //       });
+    //   });
+    // };
+
+    // distance
+
+    const calculateDistance = (coord1, coord2) => {
+      const toRad = (value) => (value * Math.PI) / 180;
+      const earthRadius = 6371; // Radius of the Earth in kilometers
+
+      const lat1 = coord1.lat;
+      const lon1 = coord1.lng;
+      const lat2 = coord2.lat;
+      const lon2 = coord2.lng;
+
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) *
+          Math.cos(toRad(lat2)) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distance = earthRadius * c;
+
+      return distance;
+    };
+
     const recalculateRoutes = () => {
       sortDestinations(destinations).then((sorted) => {
         sorted.unshift(origin);
@@ -173,6 +217,43 @@ const App = () => {
           .then((routeData) => {
             const geojson = routeData.toGeoJson();
             drawRoute(geojson, map);
+
+            const distanceInMeters =
+              geojson.features[0]?.properties?.summary?.lengthInMeters;
+            if (distanceInMeters > fuelLeftForMeters) {
+              const currentLocation = sorted[0]; // Current location is the first element in the sorted array
+              let nearestGasStation = null;
+              let minDistance = Infinity;
+
+              // Find the nearest gas station
+              for (const gasStation of gasStations) {
+                const distance = calculateDistance(currentLocation, gasStation);
+                if (distance < minDistance) {
+                  minDistance = distance;
+                  nearestGasStation = gasStation;
+                }
+              }
+
+              if (nearestGasStation) {
+                const nearestGasStationPoints =
+                  convertToPoints(nearestGasStation); // Convert nearest gas station to points format
+                sorted[1] = nearestGasStationPoints.point; // Use the "point" property of the converted gas station
+                ttapi.services
+                  .calculateRoute({
+                    key: apiKey,
+                    locations: sorted,
+                  })
+                  .then((routeData) => {
+                    const geojson = routeData.toGeoJson();
+                    drawRoute(geojson, map);
+                  });
+              } else {
+                // Notify user that there is no nearby gas station within the fuel range
+                setNotification(
+                  "No gas station is available within the fuel range."
+                );
+              }
+            }
           });
       });
     };
@@ -213,6 +294,7 @@ const App = () => {
             />
           </div>
           <div>Route Length: {routeLength} meters</div>
+          {notification && <div className="notification">{notification}</div>}
         </div>
       )}
     </>
