@@ -13,7 +13,7 @@ const App = () => {
   const [routeLength, setRouteLength] = useState(0);
   const [notification, setNotification] = useState("");
   const gasStations = []; // Global array to store gas station points
-  let fuelLeftForMeters = 500; // Fuel left in meters
+  let fuelLeftForMeters = 1000; // Fuel left in meters
 
   const convertToPoints = (lngLat) => {
     return {
@@ -54,11 +54,12 @@ const App = () => {
   // Add a gas marker to the map
 
   const addRandomGasStations = (map) => {
+    gasStations.length = 0;
     const minLng = map.getBounds()._sw.lng; // Minimum longitude value based on current map bounds
     const maxLng = map.getBounds()._ne.lng; // Maximum longitude value based on current map bounds
     const minLat = map.getBounds()._sw.lat; // Minimum latitude value based on current map bounds
     const maxLat = map.getBounds()._ne.lat; // Maximum latitude value based on current map bounds
-    const numberOfGasStations = 10; // Number of random gas stations to add
+    const numberOfGasStations = 5; // Number of random gas stations to add
 
     for (let i = 0; i < numberOfGasStations; i++) {
       const lng = Math.random() * (maxLng - minLng) + minLng;
@@ -165,7 +166,7 @@ const App = () => {
 
     const calculateDistance = (coord1, coord2) => {
       const toRad = (value) => (value * Math.PI) / 180;
-      const earthRadius = 6371; // Radius of the Earth in kilometers
+      const earthRadius = 6371000; // Radius of the Earth in meters
 
       const lat1 = coord1.lat;
       const lon1 = coord1.lng;
@@ -209,9 +210,12 @@ const App = () => {
 
               // Find the nearest gas station
               for (const gasStation of gasStations) {
-                const distance = calculateDistance(currentLocation, gasStation);
-                if (distance < minDistance) {
-                  minDistance = distance;
+                const distanceToGasStation = calculateDistance(
+                  currentLocation,
+                  gasStation
+                );
+                if (distanceToGasStation < minDistance) {
+                  minDistance = distanceToGasStation;
                   nearestGasStation = gasStation;
                 }
               }
@@ -220,9 +224,12 @@ const App = () => {
                 if (minDistance > fuelLeftForMeters) {
                   // Notify user that the nearest gas station is further than the fuel range
                   setNotification(
-                    "The nearest gas station is further than the remaining fuel range."
+                    "!!!The nearest gas station is further than the remaining fuel range."
                   );
                 } else {
+                  setNotification(
+                    "Route was recalculated to the nearest gas station."
+                  );
                   const nearestGasStationPoints =
                     convertToPoints(nearestGasStation); // Convert nearest gas station to points format
                   sorted[1] = nearestGasStationPoints.point; // Use the "point" property of the converted gas station
