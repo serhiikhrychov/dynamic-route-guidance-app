@@ -2,23 +2,22 @@ body {
   display: flex;
   justify-content: center;
 }
+
 .app {
-  height: 523px;
-  width: 166vh;
+  height: 600px;
+  width: 100vh;
 }
+
 .map-container {
   height: 100%;
   width: 100%;
-  flex-grow: 1;
 }
+
 .marker {
   background-image: url("placeholder.png");
   background-size: cover;
   width: 22px;
   height: 22px;
-  /*background-color: yellow;*/
-  /*border-radius: 11px;*/
-  /*border: solid 3px darkslategray;*/
 }
 
 .marker-delivery {
@@ -45,22 +44,8 @@ body {
   border-radius: 4px;
 }
 
-.user-input-panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 300px;
-  height: 100vh;
-  background-color: #f2f2f2;
-  padding: 20px;
-  box-sizing: border-box;
-  text-align: right;
-}
-
-.user-input-panel input {
-  margin-bottom: 10px; /* Add margin-bottom to create space between fields */
-}
-
+.user-input-panel input,
+.user-input-panel label,
 .user-input-panel button {
-  margin-top: 10px; /* Add margin-top to create space between button and fields */
+  margin-bottom: 10px;
 }

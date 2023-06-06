@@ -12,12 +12,8 @@ const App = () => {
   const [latitude, setLatitude] = useState(49.9935);
   const [routeLength, setRouteLength] = useState(0);
   const [notification, setNotification] = useState("");
-  const [fuelAmount, setFuelAmount] = useState("");
-  const [averageFuelConsumption, setAverageFuelConsumption] = useState("");
-  const [fuelLeftForMeters, setАuelLeftForMeters] = useState(0);
   const gasStations = []; // Global array to store gas station points
-  // let fuelLeftForMeters = 1000; // Fuel left in meters
-  // let [fuelLeftForMeters, setFuelLeftForMeters] = useState(1000);
+  let fuelLeftForMeters = 1000; // Fuel left in meters
 
   const convertToPoints = (lngLat) => {
     return {
@@ -27,13 +23,7 @@ const App = () => {
       },
     };
   };
-  ///////// calculate fuel left for meters
-  function fuelLeftForMeters2(fuelAmount, averageFuelConsumption) {
-    setАuelLeftForMeters((fuelAmount * 1000) / (averageFuelConsumption / 100));
-    console.log(fuelLeftForMeters);
-  }
 
-  /////////
   const drawRoute = (geoJson, map) => {
     if (map.getLayer("route")) {
       map.removeLayer("route");
@@ -307,7 +297,7 @@ const App = () => {
         <div className="app">
           <div ref={mapElement} className="map-container" />
           <div className="search-bar">
-            <h1>Where to</h1>
+            <h1>Початкова точка</h1>
             <input
               type="text"
               id="longitude"
@@ -324,32 +314,41 @@ const App = () => {
             />
           </div>
           <div id="userInputPanel" className="user-input-panel">
+            <h1>Характеристики</h1>
+            <div>
+              <label htmlFor="fuelAmount">Кількість пального (літри)</label>
+            </div>
             <input
               type="number"
               id="fuelAmount"
               name="fuelAmount"
               className="fuel-amount"
-              value={fuelAmount}
-              onChange={(e) => setFuelAmount(e.target.value)}
+              // value={fuelAmount}
+              // onChange={(e) => setFuelAmount(e.target.value)}
               placeholder="Кількість пального"
             />
+            <div>
+              <label htmlFor="averageFuelConsumption">
+                Cередній розхід палива (літри / 100 кілометрів)
+              </label>
+            </div>
             <input
               type="number"
               id="averageFuelConsumption"
               name="averageFuelConsumption"
               className="fuel-consumption"
-              value={averageFuelConsumption}
-              onChange={(e) => setAverageFuelConsumption(e.target.value)}
+              // value={averageFuelConsumption}
+              // onChange={(e) => setAverageFuelConsumption(e.target.value)}
               placeholder="Cередній розхід палива"
             />
-            <br /> {/* <br /> */}
+            <br />
             <button
               type="button"
               id="calculateFuelLeftForMeters"
               className="add-fuel-left"
-              onClick={fuelLeftForMeters2}
+              // onClick={fuelLeftForMeters2}
             >
-              Clculate
+              Розрахувати відстань, на яку вистачить пального
             </button>
           </div>
           <div>Route Length: {routeLength} meters</div>
