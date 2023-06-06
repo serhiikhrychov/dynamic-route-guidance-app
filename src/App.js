@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as tt from "@tomtom-international/web-sdk-maps";
 import * as ttapi from "@tomtom-international/web-sdk-services";
 
-const apiKey = "sVTKF5tPgFePFgGMX2BaPQkyP8oDPvjZ";
+const apiKey = process.env.REACT_APP_TOM_TOM_API_KEY;
 
 export function App() {
   const mapElementRef = useRef(null);
