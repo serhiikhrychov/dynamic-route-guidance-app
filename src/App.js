@@ -1,40 +1,188 @@
 import "./App.css";
 import "@tomtom-international/web-sdk-maps/dist/maps.css";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import * as tt from "@tomtom-international/web-sdk-maps";
 import * as ttapi from "@tomtom-international/web-sdk-services";
 
-const App = () => {
-  const apiKey = process.env.REACT_APP_TOM_TOM_API_KEY;
-  const mapElement = useRef();
-  const [map, setMap] = useState({});
-  const [longitude, setLongitude] = useState(36.2304);
-  const [latitude, setLatitude] = useState(49.9935);
-  const [routeLength, setRouteLength] = useState(0);
-  const [notification, setNotification] = useState("");
-  const gasStations = []; // Global array to store gas station points
-  let fuelLeftForMeters = 1000; // Fuel left in meters
+const apiKey = "sVTKF5tPgFePFgGMX2BaPQkyP8oDPvjZ";
 
-  const convertToPoints = (lngLat) => {
-    return {
-      point: {
-        longitude: lngLat.lng,
-        latitude: lngLat.lat,
-      },
-    };
-  };
+export function App() {
+  const mapElementRef = useRef(null);
+  const mapRef = useMap({
+    mapElementRef,
+    longitude: 36.2304,
+    latitude: 49.9935,
+  });
 
-  const drawRoute = (geoJson, map) => {
-    if (map.getLayer("route")) {
-      map.removeLayer("route");
-      map.removeSource("route");
+  // useGenerateGasStations
+  const [gasStations, setGasStations] = useState([]);
+  useEffect(() => {
+    const minLng = mapRef.current.getBounds()._sw.lng;
+    const maxLng = mapRef.current.getBounds()._ne.lng;
+    const minLat = mapRef.current.getBounds()._sw.lat;
+    const maxLat = mapRef.current.getBounds()._ne.lat;
+
+    const numberOfGasStations = 5;
+    const _gasStations = [];
+
+    for (let i = 0; i < numberOfGasStations; i++) {
+      const lng = Math.random() * (maxLng - minLng) + minLng;
+      const lat = Math.random() * (maxLat - minLat) + minLat;
+
+      _gasStations.push({ lng, lat });
     }
-    map.addLayer({
+
+    setGasStations(_gasStations);
+  }, [setGasStations]);
+
+  // useRenderGasStationMarkers
+  useEffect(() => {
+    gasStations.forEach((station) => {
+      const element = document.createElement("div");
+      element.className = "marker-gas-station";
+
+      new tt.Marker({
+        element,
+      })
+        .setLngLat([station.lng, station.lat])
+        .addTo(mapRef.current);
+    });
+  }, [gasStations]);
+
+  const [origin, setOrigin] = useState({ lng: 36.2304, lat: 49.9935 });
+  const isOriginRendered = useRef(false);
+
+  // useRenderOriginMarker
+  useEffect(() => {
+    if (isOriginRendered.current) {
+      return;
+    }
+
+    const map = mapRef.current;
+
+    const popup = new tt.Popup({
+      offset: {
+        bottom: [0, -25],
+      },
+    }).setHTML("this is you");
+
+    const element = document.createElement("div");
+    element.className = "marker";
+    const marker = new tt.Marker({
+      draggable: true,
+      element: element,
+    })
+      .setLngLat([origin.lng, origin.lat])
+      .addTo(map);
+
+    marker.on("dragend", () => {
+      const lngLat = marker.getLngLat();
+      setOrigin({ lng: lngLat.lng, lat: lngLat.lat });
+    });
+
+    marker.setPopup(popup).togglePopup();
+    isOriginRendered.current = true;
+
+    return () => {
+      isOriginRendered.current = false;
+      marker.remove();
+    };
+  }, [origin, setOrigin]);
+
+  const [destinations, setDestinations] = useState([]);
+
+  // useCreateDestinationOnClick
+  useEffect(() => {
+    mapRef.current.on("click", (event) => {
+      setDestinations((prevState) => prevState.concat(event.lngLat));
+    });
+  }, []);
+
+  // useRenderDestinationMarkers
+  useEffect(() => {
+    const destinationMarkers = destinations.map((destination) => {
+      const element = document.createElement("div");
+      element.className = "marker-delivery";
+
+      return new tt.Marker({
+        element: element,
+      })
+        .setLngLat([destination.lng, destination.lat])
+        .addTo(mapRef.current);
+    });
+
+    return () => {
+      destinationMarkers.forEach((marker) => {
+        marker.remove();
+      });
+    };
+  }, [destinations]);
+
+  const [route, setRoute] = useState(null); // geojson or null
+  const lengthInMeters = getRouteLengthInMeters(route);
+
+  const [form, setForm] = useState({});
+
+  // useCreateRouteFromDestinations
+  useEffect(() => {
+    async function _perform() {
+      if (destinations.length === 0) {
+        return;
+      }
+
+      const sortedDestinations = await sortDestinations(destinations, origin);
+
+      let _route = await ttapi.services.calculateRoute({
+        key: apiKey,
+        locations: [origin, ...sortedDestinations],
+      });
+
+      const routeLengthInMeters = getRouteLengthInMeters(_route.toGeoJson());
+      const vehicleRangeInMeters =
+        getVehicleRangeInMetersByFuelAmountAndConsumption(
+          form.fuelAmount,
+          form.fuelConsumption
+        );
+      const {
+        distance: distanceToClosestGasStationInMeters,
+        gasStation: closestGasStation,
+      } = getClosestGasStationWithDistance(origin, gasStations);
+
+      if (vehicleRangeInMeters < distanceToClosestGasStationInMeters) {
+        console.warn("Not enough fuel, call for help!");
+        setRoute(null);
+        return;
+      }
+
+      if (vehicleRangeInMeters < routeLengthInMeters) {
+        console.warn(
+          "Not enough fuel to complete the trip without refill. Rebuilding a route..."
+        );
+        _route = await ttapi.services.calculateRoute({
+          key: apiKey,
+          locations: [origin, closestGasStation, ...sortedDestinations],
+        });
+      }
+
+      console.warn("Have a nice trip!");
+      setRoute(_route.toGeoJson());
+    }
+
+    _perform().catch(console.error);
+  }, [destinations, origin, gasStations, setRoute, form]);
+
+  // useRenderRoute
+  useEffect(() => {
+    if (route === null || mapRef.current === null) {
+      return;
+    }
+
+    mapRef.current.addLayer({
       id: "route",
       type: "line",
       source: {
         type: "geojson",
-        data: geoJson,
+        data: route,
       },
       paint: {
         "line-color": "#4a90e2",
@@ -42,62 +190,81 @@ const App = () => {
       },
     });
 
-    // Calculate the route length
-    const routeFeatures = geoJson.features;
-    if (routeFeatures.length > 0) {
-      const distanceInMeters =
-        routeFeatures[0].properties.summary.lengthInMeters;
-      setRouteLength(distanceInMeters);
-    }
-  };
+    return () => {
+      mapRef.current.removeLayer("route");
+      mapRef.current.removeSource("route");
+    };
+  }, [route]);
 
-  // Add a gas marker to the map
+  return (
+    <div className="app">
+      <div ref={mapElementRef} className="map-container"></div>
+      <div>Length in meters: {lengthInMeters}</div>
+      <div>
+        <button
+          type="button"
+          onClick={() => {
+            setDestinations([]);
+            setRoute(null);
+          }}
+        >
+          Clear route
+        </button>
+      </div>
+      <div>
+        <h2>Characteristics</h2>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            setForm({
+              fuelAmount: parseFloat(event.target.fuelAmount.value),
+              fuelConsumption: parseFloat(event.target.fuelConsumption.value),
+            });
+          }}
+        >
+          <div>
+            <label>
+              <div>Fuel amount (liters)</div>
+              <input
+                type="number"
+                name="fuelAmount"
+                defaultValue="0.05"
+                step="0.01"
+              />
+            </label>
+          </div>
+          <div>
+            <label>
+              <div>Average fuel consumption (liters per 100 kilometers)</div>
+              <input
+                type="number"
+                name="fuelConsumption"
+                defaultValue="5"
+                step="0.01"
+              />
+            </label>
+          </div>
+          <br />
+          <div>
+            <button type="submit">Calculate</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
-  const addRandomGasStations = (map) => {
-    gasStations.length = 0;
-    const minLng = map.getBounds()._sw.lng; // Minimum longitude value based on current map bounds
-    const maxLng = map.getBounds()._ne.lng; // Maximum longitude value based on current map bounds
-    const minLat = map.getBounds()._sw.lat; // Minimum latitude value based on current map bounds
-    const maxLat = map.getBounds()._ne.lat; // Maximum latitude value based on current map bounds
-    const numberOfGasStations = 5; // Number of random gas stations to add
-
-    for (let i = 0; i < numberOfGasStations; i++) {
-      const lng = Math.random() * (maxLng - minLng) + minLng;
-      const lat = Math.random() * (maxLat - minLat) + minLat;
-
-      gasStations.push({ lng, lat }); // Add gas station points to the global array
-
-      const element = document.createElement("div");
-      element.className = "marker-gas-station";
-
-      new tt.Marker({
-        element: element,
-      })
-        .setLngLat([lng, lat])
-        .addTo(map);
-    }
-  };
-
-  const addDeliveryMarker = (lngLat, map) => {
-    const element = document.createElement("div");
-    element.className = "marker-delivery";
-    new tt.Marker({
-      element: element,
-    })
-      .setLngLat([lngLat.lng, lngLat.lat])
-      .addTo(map);
-  };
+function useMap({ mapElementRef, longitude, latitude }) {
+  const mapRef = useRef(null);
 
   useEffect(() => {
-    const origin = {
-      lng: longitude,
-      lat: latitude,
-    };
-    const destinations = [];
+    if (mapElementRef === null) {
+      return null;
+    }
 
-    let map = tt.map({
+    mapRef.current = tt.map({
       key: apiKey,
-      container: mapElement.current,
+      container: mapElementRef.current,
       center: [longitude, latitude],
       zoom: 14,
       stylesVisibility: {
@@ -105,260 +272,117 @@ const App = () => {
         trafficFlow: true,
       },
     });
+  }, []);
 
-    setMap(map);
-    const addMarker = () => {
-      const popupOffset = {
-        bottom: [0, -25],
-      };
-      const popup = new tt.Popup({ offset: popupOffset }).setHTML(
-        "this is you"
-      );
-      const element = document.createElement("div");
-      element.className = "marker";
+  return mapRef;
+}
 
-      const marker = new tt.Marker({
-        draggable: true,
-        element: element,
-      })
-        .setLngLat([longitude, latitude])
-        .addTo(map);
+const sortDestinations = (locations, origin) => {
+  const pointsForDestinations = locations.map((destination) => {
+    return convertToPoints(destination);
+  });
 
-      marker.on("dragend", () => {
-        const lngLat = marker.getLngLat();
-        setLongitude(lngLat.lng);
-        setLatitude(lngLat.lat);
+  const callParams = {
+    key: apiKey,
+    destinations: pointsForDestinations,
+    origins: [convertToPoints(origin)],
+  };
+
+  return new Promise((resolve, reject) => {
+    ttapi.services.matrixRouting(callParams).then((matrixAPIResults) => {
+      const results = matrixAPIResults.matrix[0];
+      const resultsArray = results.map((result, index) => {
+        return {
+          location: locations[index],
+          drivingtime: result.response.summary?.travelTimeInSeconds || 0,
+        };
       });
 
-      marker.setPopup(popup).togglePopup();
-    };
-
-    addMarker();
-
-    const sortDestinations = (locations) => {
-      const pointsForDestinations = locations.map((destination) => {
-        return convertToPoints(destination);
+      resultsArray.sort((a, b) => {
+        return a.drivingtime - b.drivingtime;
       });
-      const callParams = {
-        key: apiKey,
-        destinations: pointsForDestinations,
-        origins: [convertToPoints(origin)],
-      };
-      return new Promise((resolve, reject) => {
-        ttapi.services.matrixRouting(callParams).then((matrixAPIResults) => {
-          const results = matrixAPIResults.matrix[0];
-          const resultsArray = results.map((result, index) => {
-            return {
-              location: locations[index],
-              drivingtime: result.response.summary?.travelTimeInSeconds || 0,
-            };
-          });
-          resultsArray.sort((a, b) => {
-            return a.drivingtime - b.drivingtime;
-          });
-          const sortedLocations = resultsArray.map((result) => {
-            return result.location;
-          });
-          resolve(sortedLocations);
-        });
+
+      const sortedLocations = resultsArray.map((result) => {
+        return result.location;
       });
-    };
 
-    const calculateDistance = (coord1, coord2) => {
-      const toRad = (value) => (value * Math.PI) / 180;
-      const earthRadius = 6371000; // Radius of the Earth in meters
-
-      const lat1 = coord1.lat;
-      const lon1 = coord1.lng;
-      const lat2 = coord2.lat;
-      const lon2 = coord2.lng;
-
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) *
-          Math.cos(toRad(lat2)) *
-          Math.sin(dLon / 2) *
-          Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distance = earthRadius * c;
-
-      return distance;
-    };
-
-    const recalculateRoutes = () => {
-      sortDestinations(destinations).then((sorted) => {
-        sorted.unshift(origin);
-
-        ttapi.services
-          .calculateRoute({
-            key: apiKey,
-            locations: sorted,
-          })
-          .then((routeData) => {
-            const geojson = routeData.toGeoJson();
-            drawRoute(geojson, map);
-
-            const distanceInMeters =
-              geojson.features[0]?.properties?.summary?.lengthInMeters;
-            if (distanceInMeters > fuelLeftForMeters) {
-              const currentLocation = sorted[0]; // Current location is the first element in the sorted array
-              let nearestGasStation = null;
-              let minDistance = Infinity;
-
-              // Find the nearest gas station
-              for (const gasStation of gasStations) {
-                const distanceToGasStation = calculateDistance(
-                  currentLocation,
-                  gasStation
-                );
-                if (distanceToGasStation < minDistance) {
-                  minDistance = distanceToGasStation;
-                  nearestGasStation = gasStation;
-                }
-              }
-
-              if (nearestGasStation) {
-                if (minDistance > fuelLeftForMeters) {
-                  // Notify user that the nearest gas station is further than the fuel range
-                  setNotification(
-                    "!!!The nearest gas station is further than the remaining fuel range."
-                  );
-                } else {
-                  setNotification(
-                    "Route was recalculated to the nearest gas station."
-                  );
-                  const nearestGasStationPoints =
-                    convertToPoints(nearestGasStation); // Convert nearest gas station to points format
-                  sorted[1] = nearestGasStationPoints.point; // Use the "point" property of the converted gas station
-                  ttapi.services
-                    .calculateRoute({
-                      key: apiKey,
-                      locations: sorted,
-                    })
-                    .then((routeData) => {
-                      const geojson = routeData.toGeoJson();
-                      drawRoute(geojson, map);
-
-                      // Check if the remaining distance is still greater than the fuel left
-                      const remainingDistance =
-                        geojson.features[0]?.properties?.summary
-                          ?.lengthInMeters;
-                      if (remainingDistance > fuelLeftForMeters) {
-                        // Notify user that the remaining distance is greater than the fuel left
-                        setNotification(
-                          "The remaining distance is greater than the fuel left."
-                        );
-                      }
-                    });
-                }
-              } else {
-                // Notify user that there is no nearby gas station within the fuel range
-                setNotification(
-                  "No gas station is available within the fuel range."
-                );
-              }
-            } else {
-              // Check if the remaining distance is still greater than the fuel left
-              const remainingDistance =
-                geojson.features[0]?.properties?.summary?.lengthInMeters;
-              if (remainingDistance > fuelLeftForMeters) {
-                // Notify user that the remaining distance is greater than the fuel left
-                setNotification(
-                  "The remaining distance is greater than the fuel left."
-                );
-              } else {
-                // Clear notification if the remaining distance is within the fuel left
-                setNotification("");
-              }
-            }
-          });
-      });
-    };
-
-    map.on("load", () => {
-      addRandomGasStations(map);
+      resolve(sortedLocations);
     });
-
-    map.on("click", (e) => {
-      destinations.push(e.lngLat);
-      addDeliveryMarker(e.lngLat, map);
-      recalculateRoutes();
-    });
-
-    return () => map.remove();
-  }, [longitude, latitude]);
-
-  return (
-    <>
-      {map && (
-        <div className="app">
-          <div ref={mapElement} className="map-container" />
-          <div className="search-bar">
-            <h1>Початкова точка</h1>
-            <input
-              type="text"
-              id="longitude"
-              className="longitude"
-              placeholder="Set longitude"
-              onChange={(e) => setLongitude(e.target.value)}
-            />
-            <input
-              type="text"
-              id="latitude"
-              className="latitude"
-              placeholder="Set latitude"
-              onChange={(e) => setLatitude(e.target.value)}
-            />
-          </div>
-          <div id="userInputPanel" className="user-input-panel">
-            <h1>Характеристики</h1>
-            <div>
-              <label htmlFor="fuelAmount">Кількість пального (літри)</label>
-            </div>
-            <input
-              type="number"
-              id="fuelAmount"
-              name="fuelAmount"
-              className="fuel-amount"
-              // value={fuelAmount}
-              // onChange={(e) => setFuelAmount(e.target.value)}
-              placeholder="Кількість пального"
-            />
-            <div>
-              <label htmlFor="averageFuelConsumption">
-                Cередній розхід палива (літри / 100 кілометрів)
-              </label>
-            </div>
-            <input
-              type="number"
-              id="averageFuelConsumption"
-              name="averageFuelConsumption"
-              className="fuel-consumption"
-              // value={averageFuelConsumption}
-              // onChange={(e) => setAverageFuelConsumption(e.target.value)}
-              placeholder="Cередній розхід палива"
-            />
-            <br />
-            <button
-              type="button"
-              id="calculateFuelLeftForMeters"
-              className="add-fuel-left"
-              // onClick={fuelLeftForMeters2}
-            >
-              Розрахувати відстань, на яку вистачить пального
-            </button>
-          </div>
-          <div>Route Length: {routeLength} meters</div>
-          {fuelLeftForMeters < routeLength && (
-            <div className="notification">{notification}</div>
-          )}
-        </div>
-      )}
-    </>
-  );
+  });
 };
 
-export default App;
+const convertToPoints = (lngLat) => {
+  return {
+    point: {
+      longitude: lngLat.lng,
+      latitude: lngLat.lat,
+    },
+  };
+};
+
+function getRouteLengthInMeters(route) {
+  return (
+    route?.routes?.[0]?.summary?.lengthInMeters ??
+    route?.features?.[0]?.properties?.summary?.lengthInMeters ??
+    0
+  );
+}
+
+function getVehicleRangeInMetersByFuelAmountAndConsumption(
+  fuelAmount,
+  fuelConsumption
+) {
+  const RANGE_PER_CONSUMPTION_UNIT_IN_KILOMETERS = 100;
+  const KILOMETER_IN_METERS = 1000;
+
+  // 5 liters for 5l / 100km car means 100km of range
+  const rangeInKilometers =
+    (fuelAmount / fuelConsumption) * RANGE_PER_CONSUMPTION_UNIT_IN_KILOMETERS;
+
+  return rangeInKilometers * KILOMETER_IN_METERS;
+}
+
+const getDistance = (coord1, coord2) => {
+  const toRad = (value) => (value * Math.PI) / 180;
+  const earthRadius = 6371000; // Radius of the Earth in meters
+
+  const lat1 = coord1.lat;
+  const lon1 = coord1.lng;
+  const lat2 = coord2.lat;
+  const lon2 = coord2.lng;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = earthRadius * c;
+
+  return distance;
+};
+
+function getClosestGasStationWithDistance(origin, gasStations) {
+  return gasStations.reduce(
+    (accumulator, currentGasStation) => {
+      const distanceToCurrentGasStation = getDistance(
+        origin,
+        currentGasStation
+      );
+
+      if (distanceToCurrentGasStation >= accumulator.distance) {
+        return accumulator;
+      }
+
+      return {
+        distance: distanceToCurrentGasStation,
+        gasStation: currentGasStation,
+      };
+    },
+    { distance: Infinity, gasStation: null }
+  );
+}
