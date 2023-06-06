@@ -12,8 +12,12 @@ const App = () => {
   const [latitude, setLatitude] = useState(49.9935);
   const [routeLength, setRouteLength] = useState(0);
   const [notification, setNotification] = useState("");
+  const [fuelAmount, setFuelAmount] = useState("");
+  const [averageFuelConsumption, setAverageFuelConsumption] = useState("");
+  const [fuelLeftForMeters, setАuelLeftForMeters] = useState(0);
   const gasStations = []; // Global array to store gas station points
-  let fuelLeftForMeters = 1000; // Fuel left in meters
+  // let fuelLeftForMeters = 1000; // Fuel left in meters
+  // let [fuelLeftForMeters, setFuelLeftForMeters] = useState(1000);
 
   const convertToPoints = (lngLat) => {
     return {
@@ -23,7 +27,13 @@ const App = () => {
       },
     };
   };
+  ///////// calculate fuel left for meters
+  function fuelLeftForMeters2(fuelAmount, averageFuelConsumption) {
+    setАuelLeftForMeters((fuelAmount * 1000) / (averageFuelConsumption / 100));
+    console.log(fuelLeftForMeters);
+  }
 
+  /////////
   const drawRoute = (geoJson, map) => {
     if (map.getLayer("route")) {
       map.removeLayer("route");
@@ -312,6 +322,35 @@ const App = () => {
               placeholder="Set latitude"
               onChange={(e) => setLatitude(e.target.value)}
             />
+          </div>
+          <div id="userInputPanel" className="user-input-panel">
+            <input
+              type="number"
+              id="fuelAmount"
+              name="fuelAmount"
+              className="fuel-amount"
+              value={fuelAmount}
+              onChange={(e) => setFuelAmount(e.target.value)}
+              placeholder="Кількість пального"
+            />
+            <input
+              type="number"
+              id="averageFuelConsumption"
+              name="averageFuelConsumption"
+              className="fuel-consumption"
+              value={averageFuelConsumption}
+              onChange={(e) => setAverageFuelConsumption(e.target.value)}
+              placeholder="Cередній розхід палива"
+            />
+            <br /> {/* <br /> */}
+            <button
+              type="button"
+              id="calculateFuelLeftForMeters"
+              className="add-fuel-left"
+              onClick={fuelLeftForMeters2}
+            >
+              Clculate
+            </button>
           </div>
           <div>Route Length: {routeLength} meters</div>
           {fuelLeftForMeters < routeLength && (
