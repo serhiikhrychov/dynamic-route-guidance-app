@@ -3,6 +3,8 @@ import "@tomtom-international/web-sdk-maps/dist/maps.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as tt from "@tomtom-international/web-sdk-maps";
 import * as ttapi from "@tomtom-international/web-sdk-services";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const apiKey = process.env.REACT_APP_TOM_TOM_API_KEY;
 
@@ -149,13 +151,13 @@ export function App() {
       } = getClosestGasStationWithDistance(origin, gasStations);
 
       if (vehicleRangeInMeters < distanceToClosestGasStationInMeters) {
-        console.warn("Not enough fuel, call for help!");
+        toast.warn("Not enough fuel, call for help!");
         setRoute(null);
         return;
       }
 
       if (vehicleRangeInMeters < routeLengthInMeters) {
-        console.warn(
+        toast.warn(
           "Not enough fuel to complete the trip without refill. Rebuilding a route..."
         );
         _route = await ttapi.services.calculateRoute({
@@ -164,7 +166,7 @@ export function App() {
         });
       }
 
-      console.warn("Have a nice trip!");
+      toast.warn("Have a nice trip!");
       setRoute(_route.toGeoJson());
     }
 
@@ -249,6 +251,10 @@ export function App() {
             <button type="submit">Calculate</button>
           </div>
         </form>
+      </div>
+      <div className="notification-container">
+        {/* Add the ToastContainer component within a specific container */}
+        <ToastContainer />
       </div>
     </div>
   );
