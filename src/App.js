@@ -7,6 +7,8 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 const apiKey = process.env.REACT_APP_TOM_TOM_API_KEY;
+// const engineType = "diesel";
+// const engineCapacity = 1.6;
 
 export function App() {
   const mapElementRef = useRef(null);
@@ -215,6 +217,24 @@ export function App() {
       </div>
       <div>
         <h2>Characteristics</h2>
+        <div>
+          <label>
+            <div>Consider traffic flow</div>
+            <input type="checkbox" name="traffic-flow" />
+          </label>
+        </div>
+        <div>
+          <label>
+            <div>Type of engine (Petrol/Disel)</div>
+            <input type="text" name="enginetype" defaultValue="Petrol" />
+          </label>
+        </div>
+        <div>
+          <label>
+            <div>Engine capacity (1,6/2.0/etc)</div>
+            <input type="number" name="fuelConsumption" defaultValue="2.0" />
+          </label>
+        </div>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -336,10 +356,26 @@ function getRouteLengthInMeters(route) {
 
 function getVehicleRangeInMetersByFuelAmountAndConsumption(
   fuelAmount,
-  fuelConsumption
+  fuelConsumption,
+  engineType,
+  engineCapacity
 ) {
   const RANGE_PER_CONSUMPTION_UNIT_IN_KILOMETERS = 100;
   const KILOMETER_IN_METERS = 1000;
+
+  // Adjust fuel consumption based on engine type and capacity
+  if (engineType === "disel") {
+    fuelConsumption *= 1; // no adjustment for petrol engines
+  } else if (engineType === "petrol") {
+    fuelConsumption *= 1.1; // 10% higher consumption for diesel engines
+  }
+
+  // Adjust fuel consumption based on engine capacity
+  if (engineCapacity === 2.0) {
+    fuelConsumption *= 1; // no adjustment for 2.0L engines
+  } else if (engineCapacity === 1.6) {
+    fuelConsumption *= 0.9; // 10% lower consumption for 1.6L engines
+  }
 
   // 5 liters for 5l / 100km car means 100km of range
   const rangeInKilometers =
